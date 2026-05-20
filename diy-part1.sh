@@ -22,8 +22,6 @@ rm -rf /tmp/luci-app-mentohust
 # =========================================================
 # 1. UA2F 主程序
 # =========================================================
-# Zxilly/UA2F 的 OpenWrt 包在仓库 openwrt/ 子目录里，
-# 这里复制成标准 package/custom/ua2f 结构，便于 OpenWrt 识别。
 git clone --depth=1 https://github.com/Zxilly/UA2F.git /tmp/UA2F
 
 mkdir -p package/custom/ua2f
@@ -32,8 +30,9 @@ mkdir -p package/custom/ua2f-src
 cp -r /tmp/UA2F/openwrt/* package/custom/ua2f/
 cp -r /tmp/UA2F/. package/custom/ua2f-src/
 
-# 修正 UA2F Makefile 的源码目录指向
-sed -i 's#PKG_BUILD_DIR:=$(CURDIR)/..#PKG_BUILD_DIR:=$(CURDIR)/../ua2f-src#g' package/custom/ua2f/Makefile
+# 关键修正：
+# 使用 TOPDIR 指向 OpenWrt 源码根目录，避免 CURDIR 路径不确定。
+sed -i 's#PKG_BUILD_DIR:=$(CURDIR)/..#PKG_BUILD_DIR:=$(TOPDIR)/package/custom/ua2f-src#g' package/custom/ua2f/Makefile
 
 # =========================================================
 # 2. UA2F LuCI 配置界面
