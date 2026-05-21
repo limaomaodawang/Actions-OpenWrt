@@ -11,6 +11,7 @@ echo "================================================="
 # =========================================================
 
 mkdir -p package/custom
+mkdir -p custom-src
 
 echo "[0/5] Cleaning old custom package directories..."
 
@@ -20,12 +21,14 @@ rm -rf package/custom/luci-app-ua2f
 rm -rf package/custom/mentohust
 rm -rf package/custom/luci-app-mentohust
 
+rm -rf custom-src/ua2f-src
+
 rm -rf /tmp/UA2F
 rm -rf /tmp/luci-app-ua2f
 rm -rf /tmp/luci-app-mentohust
 
 # 如果 package/feeds 已经存在，就顺手清理同名包，避免冲突。
-# 在当前 workflow 里 diy-part1.sh 执行时通常还没 install feeds，
+# 当前 workflow 中 diy-part1.sh 通常在 feeds install 之前执行，
 # 所以这里必须允许 package/feeds 不存在。
 if [ -d "package/feeds" ]; then
   echo "[0/5] Cleaning duplicate packages from package/feeds..."
@@ -49,38 +52,38 @@ git clone --depth=1 --branch v4.10.2 https://github.com/Zxilly/UA2F.git /tmp/UA2
 echo "[UA2F] Check cloned source..."
 ls -la /tmp/UA2F
 
-if [ ! -f /tmp/UA2F/CMakeLists.txt ]; then
+test -f /tmp/UA2F/CMakeLists.txt || {
   echo "ERROR: /tmp/UA2F/CMakeLists.txt not found."
   echo "ERROR: UA2F source is incomplete."
   exit 1
-fi
+}
 
-if [ ! -f /tmp/UA2F/openwrt/Makefile ]; then
+test -f /tmp/UA2F/openwrt/Makefile || {
   echo "ERROR: /tmp/UA2F/openwrt/Makefile not found."
   echo "ERROR: UA2F OpenWrt package Makefile is missing."
   exit 1
-fi
+}
 
-echo "[UA2F] Copy full source to package/custom/ua2f-src..."
-mkdir -p package/custom/ua2f-src
-cp -a /tmp/UA2F/. package/custom/ua2f-src/
+echo "[UA2F] Copy full source to custom-src/ua2f-src..."
+mkdir -p custom-src/ua2f-src
+cp -a /tmp/UA2F/. custom-src/ua2f-src/
 
 echo "[UA2F] Copy OpenWrt package wrapper to package/custom/ua2f..."
 mkdir -p package/custom/ua2f
 cp -a /tmp/UA2F/openwrt/. package/custom/ua2f/
 
 echo "[UA2F] Patch PKG_BUILD_DIR..."
-sed -i 's#^PKG_BUILD_DIR:=.*#PKG_BUILD_DIR:=$(TOPDIR)/package/custom/ua2f-src#' package/custom/ua2f/Makefile
+sed -i 's#^PKG_BUILD_DIR:=.*#PKG_BUILD_DIR:=$(TOPDIR)/custom-src/ua2f-src#' package/custom/ua2f/Makefile
 
 echo "[UA2F] Final check..."
-echo "---- package/custom/ua2f-src ----"
-ls -la package/custom/ua2f-src
+echo "---- custom-src/ua2f-src ----"
+ls -la custom-src/ua2f-src
 
 echo "---- package/custom/ua2f ----"
 ls -la package/custom/ua2f
 
-test -f package/custom/ua2f-src/CMakeLists.txt || {
-  echo "ERROR: package/custom/ua2f-src/CMakeLists.txt not found."
+test -f custom-src/ua2f-src/CMakeLists.txt || {
+  echo "ERROR: custom-src/ua2f-src/CMakeLists.txt not found."
   exit 1
 }
 
@@ -103,11 +106,11 @@ echo "================================================="
 
 git clone --depth=1 https://github.com/lucikap/luci-app-ua2f.git /tmp/luci-app-ua2f
 
-if [ ! -d /tmp/luci-app-ua2f/luci-app-ua2f ]; then
+test -d /tmp/luci-app-ua2f/luci-app-ua2f || {
   echo "ERROR: /tmp/luci-app-ua2f/luci-app-ua2f not found."
   echo "ERROR: luci-app-ua2f source layout changed or clone failed."
   exit 1
-fi
+}
 
 cp -a /tmp/luci-app-ua2f/luci-app-ua2f package/custom/luci-app-ua2f
 
@@ -128,15 +131,15 @@ echo "================================================="
 
 git clone --depth=1 https://github.com/sbwml/luci-app-mentohust.git /tmp/luci-app-mentohust
 
-if [ ! -d /tmp/luci-app-mentohust/mentohust ]; then
+test -d /tmp/luci-app-mentohust/mentohust || {
   echo "ERROR: /tmp/luci-app-mentohust/mentohust not found."
   exit 1
-fi
+}
 
-if [ ! -d /tmp/luci-app-mentohust/luci-app-mentohust ]; then
+test -d /tmp/luci-app-mentohust/luci-app-mentohust || {
   echo "ERROR: /tmp/luci-app-mentohust/luci-app-mentohust not found."
   exit 1
-fi
+}
 
 cp -a /tmp/luci-app-mentohust/mentohust package/custom/mentohust
 cp -a /tmp/luci-app-mentohust/luci-app-mentohust package/custom/luci-app-mentohust
@@ -165,13 +168,19 @@ echo "================================================="
 echo "---- package/custom ----"
 ls -la package/custom
 
-echo "---- UA2F source check ----"
-ls -la package/custom/ua2f-src | head -50
+echo "---- custom-src/ua2f-src ----"
+ls -la custom-src/ua2f-src | head -50
 
 echo "---- UA2F package Makefile check ----"
 grep '^PKG_NAME' package/custom/ua2f/Makefile || true
 grep '^PKG_VERSION' package/custom/ua2f/Makefile || true
 grep '^PKG_BUILD_DIR' package/custom/ua2f/Makefile || true
+
+echo "---- Make sure old wrong path does not exist ----"
+test ! -d package/custom/ua2f-src || {
+  echo "ERROR: package/custom/ua2f-src still exists. This will break package scanning."
+  exit 1
+}
 
 # =========================================================
 # 5. 完成
