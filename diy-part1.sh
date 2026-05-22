@@ -2,41 +2,56 @@
 set -e
 
 echo "================================================="
-echo " Redmi AC2100 campus build"
+echo " Redmi AC2100 Campus Build"
 echo " DIY part1: add custom packages"
 echo "================================================="
+
 
 # =========================================================
 # 0. 清理旧的错误结构
 # =========================================================
 
-echo "[0/4] Cleaning old broken UA2F / MentoHUST directories..."
+echo "[0/4] Cleaning old broken custom package layouts..."
 
+# 旧的错误 UA2F 拆分结构，必须清理
 rm -rf package/custom/ua2f
 rm -rf package/custom/ua2f-src
+rm -rf custom-src/ua2f-src
+
+# 旧的 custom 包结构，统一清理
 rm -rf package/custom/luci-app-ua2f
 rm -rf package/custom/mentohust
 rm -rf package/custom/luci-app-mentohust
 
-rm -rf custom-src/ua2f-src
-
+# 正确官方结构也先清理，避免重复 clone
 rm -rf package/UA2F
 rm -rf package/luci-app-ua2f
 rm -rf package/mentohust
 rm -rf package/luci-app-mentohust
 
+# 临时目录
 rm -rf /tmp/luci-app-ua2f
 rm -rf /tmp/luci-app-mentohust
 
 
 # =========================================================
-# 1. UA2F 主程序
+# 1. UA2F 主程序：使用官方 OpenWrt 包结构
 # =========================================================
-# 重要：
-# 不要拆源码。
-# 官方/社区方案就是直接 clone 到 package/UA2F。
-# UA2F 自带 openwrt/Makefile，里面 PKG_BUILD_DIR=$(CURDIR)/..
-# 所以 OpenWrt 扫描 package/UA2F/openwrt 时，会自动回到 package/UA2F 找 CMakeLists.txt。
+# 正确结构：
+# package/UA2F/
+# ├── CMakeLists.txt
+# ├── src/
+# └── openwrt/
+#     └── Makefile
+#
+# OpenWrt 会扫描 package/UA2F/openwrt/Makefile。
+# UA2F 官方 Makefile 里 PKG_BUILD_DIR=$(CURDIR)/..，
+# 所以它会自动回到 package/UA2F 找 CMakeLists.txt。
+#
+# 不要再拆成：
+# package/custom/ua2f
+# package/custom/ua2f-src
+# custom-src/ua2f-src
 
 echo "================================================="
 echo "[1/4] Installing UA2F official package layout"
@@ -44,15 +59,17 @@ echo "================================================="
 
 git clone --depth=1 --branch v4.10.2 https://github.com/Zxilly/UA2F.git package/UA2F
 
-echo "[UA2F] Check official layout..."
+echo "[UA2F] Checking official layout..."
 
 test -f package/UA2F/CMakeLists.txt || {
   echo "ERROR: package/UA2F/CMakeLists.txt not found."
+  echo "ERROR: UA2F source is incomplete."
   exit 1
 }
 
 test -f package/UA2F/openwrt/Makefile || {
   echo "ERROR: package/UA2F/openwrt/Makefile not found."
+  echo "ERROR: UA2F OpenWrt Makefile is missing."
   exit 1
 }
 
@@ -62,6 +79,7 @@ ls -la package/UA2F | head -50
 echo "---- package/UA2F/openwrt ----"
 ls -la package/UA2F/openwrt
 
+echo "---- UA2F PKG_BUILD_DIR ----"
 grep '^PKG_BUILD_DIR' package/UA2F/openwrt/Makefile || true
 
 echo "[UA2F] OK."
@@ -79,6 +97,7 @@ git clone --depth=1 https://github.com/lucikap/luci-app-ua2f.git /tmp/luci-app-u
 
 test -d /tmp/luci-app-ua2f/luci-app-ua2f || {
   echo "ERROR: /tmp/luci-app-ua2f/luci-app-ua2f not found."
+  echo "ERROR: luci-app-ua2f source layout changed or clone failed."
   exit 1
 }
 
@@ -140,22 +159,31 @@ echo "================================================="
 echo "---- package root custom packages ----"
 ls -la package | grep -E "UA2F|ua2f|mentohust" || true
 
-echo "---- make sure wrong UA2F layouts do not exist ----"
+echo "---- make sure old wrong UA2F layouts do not exist ----"
 
 test ! -d package/custom/ua2f || {
   echo "ERROR: package/custom/ua2f still exists."
+  echo "ERROR: old split UA2F layout must be removed."
   exit 1
 }
 
 test ! -d package/custom/ua2f-src || {
   echo "ERROR: package/custom/ua2f-src still exists."
+  echo "ERROR: old split UA2F source layout must be removed."
   exit 1
 }
 
 test ! -d custom-src/ua2f-src || {
   echo "ERROR: custom-src/ua2f-src still exists."
+  echo "ERROR: old workaround UA2F layout must be removed."
   exit 1
 }
+
+test -f package/UA2F/CMakeLists.txt || exit 1
+test -f package/UA2F/openwrt/Makefile || exit 1
+test -f package/luci-app-ua2f/Makefile || exit 1
+test -f package/mentohust/Makefile || exit 1
+test -f package/luci-app-mentohust/Makefile || exit 1
 
 echo "================================================="
 echo " DIY part1 done."
