@@ -70,6 +70,9 @@ test ! -d custom-src/ua2f-src || {
 echo "---- UA2F PKG_BUILD_DIR ----"
 grep '^PKG_BUILD_DIR' package/UA2F/openwrt/Makefile || true
 
+echo "---- UA2F PKG_VERSION ----"
+grep '^PKG_VERSION' package/UA2F/openwrt/Makefile || true
+
 echo "[UA2F layout] OK."
 
 
@@ -106,9 +109,11 @@ cat > files/etc/uci-defaults/99-redmi-ac2100-campus <<'EOF'
 # =========================================================
 # 1. 系统基础设置
 # =========================================================
+# 主机名不要使用 OpenWrt / Router / Redmi / Xiaomi 等明显路由器字样。
+# 这里用普通 PC / 笔记本风格名称，降低校园网环境下的显眼程度。
 
 uci -q batch <<EOT
-set system.@system[0].hostname='Redmi-AC2100'
+set system.@system[0].hostname='ThinkPad-LAN'
 set system.@system[0].zonename='Asia/Shanghai'
 set system.@system[0].timezone='CST-8'
 commit system
@@ -126,16 +131,30 @@ EOT
 
 
 # =========================================================
-# 3. UA2F 底层配置
+# 3. 防火墙稳定设置
+# =========================================================
+# 关闭 flow offload 残留开关。
+# 你之前防火墙重启时出现过 FLOWOFFLOAD target warning，
+# 校园网环境下也不建议默认开启 flow offload。
+
+uci -q batch <<EOT
+set firewall.@defaults[0].flow_offloading='0'
+set firewall.@defaults[0].flow_offloading_hw='0'
+commit firewall
+EOT
+
+
+# =========================================================
+# 4. UA2F 底层配置：校园网长期稳定版
 # =========================================================
 # enabled=1              默认启用 UA2F
 # handle_fw=1            自动处理防火墙规则
 # handle_tls=0           不处理 HTTPS，减少干扰
 # handle_mmtls=0         不处理微信 mmtls，减少干扰
-# handle_intranet=0      默认不处理内网流量，稳定优先
-# disable_connmark=0     保留 connmark
-# max_http_sessions=0    不限制 HTTP 会话数量
-# session_ttl=300        默认会话 TTL
+# handle_intranet=1      校园网/宿舍网常见上级地址是内网段，建议处理
+# disable_connmark=1     稳定优先，避免 connmark/conntrack 兼容问题
+# max_http_sessions=256  限制会话缓存，避免无限增长
+# session_ttl=120        缩短会话生命周期，长期运行更稳
 
 if [ -x /etc/init.d/ua2f ]; then
   uci -q batch <<EOT
@@ -143,11 +162,11 @@ set ua2f.enabled.enabled='1'
 set ua2f.firewall.handle_fw='1'
 set ua2f.firewall.handle_tls='0'
 set ua2f.firewall.handle_mmtls='0'
-set ua2f.firewall.handle_intranet='0'
+set ua2f.firewall.handle_intranet='1'
 set ua2f.main.custom_ua=''
-set ua2f.main.disable_connmark='0'
-set ua2f.main.max_http_sessions='0'
-set ua2f.main.session_ttl='300'
+set ua2f.main.disable_connmark='1'
+set ua2f.main.max_http_sessions='256'
+set ua2f.main.session_ttl='120'
 commit ua2f
 EOT
 
@@ -156,32 +175,38 @@ fi
 
 
 # =========================================================
-# 4. luci-app-ua2f 配置界面同步配置
+# 5. luci-app-ua2f 配置同步，但不默认启用 autoua2f
 # =========================================================
-# luci-app-ua2f 使用 /etc/config/autoua2f。
-# 如果这里只写 ua2f，不写 autoua2f，
-# 可能出现 LuCI 页面显示状态和实际后台状态不一致的问题。
+# 只同步 LuCI 页面配置。
+# 不默认启用 autoua2f，避免 autoua2f 和 ua2f 两个服务同时管理状态。
+# 长期稳定版以 /etc/init.d/ua2f 为准。
 
-if [ -x /etc/init.d/autoua2f ]; then
+if [ -f /etc/config/autoua2f ]; then
   uci -q batch <<EOT
 set autoua2f.config.enabled='1'
 set autoua2f.config.handle_fw='1'
 set autoua2f.config.handle_tls='0'
 set autoua2f.config.handle_mmtls='0'
-set autoua2f.config.handle_intranet='0'
+set autoua2f.config.handle_intranet='1'
 set autoua2f.config.Custom_UA=''
 commit autoua2f
 EOT
+fi
 
-  /etc/init.d/autoua2f enable
+if [ -x /etc/init.d/autoua2f ]; then
+  /etc/init.d/autoua2f disable
 fi
 
 
 # =========================================================
-# 5. MentoHUST 不默认启动
+# 6. MentoHUST 不默认启动
 # =========================================================
 # MentoHUST 需要先在 LuCI 里填写账号、密码、网卡、认证参数。
 # 没配置好就开机自启，反而容易启动失败或反复认证异常。
+
+if [ -x /etc/init.d/mentohust ]; then
+  /etc/init.d/mentohust disable
+fi
 
 exit 0
 EOF
@@ -224,7 +249,9 @@ fi
 echo "[6/6] DIY part2 done."
 echo "================================================="
 echo " Default LAN IP: 192.168.10.1"
-echo " Hostname: Redmi-AC2100"
+echo " Hostname: ThinkPad-LAN"
 echo " UA2F: enabled by default"
+echo " UA2F default: handle_intranet=1, disable_connmark=1"
 echo " MentoHUST: installed but not enabled by default"
+echo " Flow offload: disabled"
 echo "================================================="
