@@ -52,12 +52,21 @@ rm -rf /tmp/luci-app-mentohust
 # package/custom/ua2f
 # package/custom/ua2f-src
 # custom-src/ua2f-src
+#
+# 重要：
+# 这里固定 v5.0.0，避免继续构建到当前运行中会 Segmentation fault 的 v4.10.2。
 
 echo "================================================="
 echo "[1/4] Installing UA2F official package layout"
 echo "================================================="
 
-git clone --depth=1 --branch v4.10.2 https://github.com/Zxilly/UA2F.git package/UA2F
+git clone --depth=1 --branch v5.0.0 https://github.com/Zxilly/UA2F.git package/UA2F
+
+# 部分 tag 的 openwrt/Makefile 可能仍显示旧版本号，修正显示版本。
+# 不影响源码主体，只避免刷机后 log 显示还是 4.10.2。
+if [ -f package/UA2F/openwrt/Makefile ]; then
+  sed -i 's/PKG_VERSION:=4.10.2/PKG_VERSION:=5.0.0/g' package/UA2F/openwrt/Makefile
+fi
 
 echo "[UA2F] Checking official layout..."
 
@@ -81,6 +90,9 @@ ls -la package/UA2F/openwrt
 
 echo "---- UA2F PKG_BUILD_DIR ----"
 grep '^PKG_BUILD_DIR' package/UA2F/openwrt/Makefile || true
+
+echo "---- UA2F PKG_VERSION ----"
+grep '^PKG_VERSION' package/UA2F/openwrt/Makefile || true
 
 echo "[UA2F] OK."
 
@@ -188,4 +200,5 @@ test -f package/luci-app-mentohust/Makefile || exit 1
 echo "================================================="
 echo " DIY part1 done."
 echo " Correct UA2F layout: package/UA2F/openwrt"
+echo " UA2F version target: v5.0.0"
 echo "================================================="
